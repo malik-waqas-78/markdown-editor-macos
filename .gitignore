@@ -1,0 +1,12 @@
+# Swift / SwiftPM build artifacts
+.build/
+build/
+*.dSYM/
+
+# macOS
+.DS_Store
+
+# Xcode (if opened)
+*.xcodeproj
+.swiftpm/
+DerivedData/
