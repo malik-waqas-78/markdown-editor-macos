@@ -21,7 +21,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/${EXEC_NAME}"
 cp Info.plist "$APP/Contents/Info.plist"
 
-# SwiftPM resource bundle goes in Resources/ (Bundle.main.resourceURL) so Bundle.module resolves.
+# Copy the web resources straight into Resources/web so they load via Bundle.main
+# (avoids the fragile Bundle.module accessor, which fatalErrors when unresolved).
+cp -R "Sources/${EXEC_NAME}/Resources/web" "$APP/Contents/Resources/web"
+# Also keep the SwiftPM resource bundle if present (harmless fallback).
 [ -d "$RES_BUNDLE" ] && cp -R "$RES_BUNDLE" "$APP/Contents/Resources/"
 
 echo "▸ Generating icon…"

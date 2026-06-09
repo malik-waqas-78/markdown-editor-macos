@@ -16,11 +16,28 @@ struct PreviewView: NSViewRepresentable {
         web.navigationDelegate = context.coordinator
         controller.webView = web
 
-        if let dir = Bundle.module.url(forResource: "web", withExtension: nil) {
+        if let dir = Self.webResourceDirectory() {
             let index = dir.appendingPathComponent("index.html")
             web.loadFileURL(index, allowingReadAccessTo: dir)
         }
         return web
+    }
+
+    /// Locate the bundled `web` resources without using `Bundle.module`,
+    /// whose generated accessor calls `fatalError` when the bundle is missing.
+    static func webResourceDirectory() -> URL? {
+        // 1. Installed .app: web/ copied directly into Contents/Resources/.
+        if let dir = Bundle.main.url(forResource: "web", withExtension: nil) {
+            return dir
+        }
+        // 2. SwiftPM resource bundle (e.g. `swift run`): web/ inside the .bundle.
+        if let bundleURL = Bundle.main.url(forResource: "MarkdownEditor_MarkdownEditor",
+                                           withExtension: "bundle"),
+           let bundle = Bundle(url: bundleURL),
+           let dir = bundle.url(forResource: "web", withExtension: nil) {
+            return dir
+        }
+        return nil
     }
 
     func updateNSView(_ web: WKWebView, context: Context) {
