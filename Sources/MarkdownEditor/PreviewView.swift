@@ -87,11 +87,26 @@ final class PreviewController: ObservableObject {
 
     func exportPDF(to url: URL) {
         guard let web = webView else { return }
-        // Render the whole document to a single tall PDF page, then re-slice it
-        // into US-Letter pages so the output paginates properly.
-        web.createPDF(configuration: WKPDFConfiguration()) { result in
-            guard case .success(let data) = result else { return }
-            Self.paginate(pdfData: data, to: url)
+        // The on-screen preview uses generous body padding and a centered
+        // max-width column. Strip both for the PDF render so output is
+        // edge-to-edge, then restore the preview styling afterward.
+        let tighten = """
+        (function(){var b=document.body;window.__padSave=b.style.padding;b.style.padding='8px';\
+        var c=document.getElementById('content');if(c){window.__maxSave=c.style.maxWidth;c.style.maxWidth='none';}})();
+        """
+        let restore = """
+        (function(){var b=document.body;b.style.padding=window.__padSave||'';\
+        var c=document.getElementById('content');if(c){c.style.maxWidth=window.__maxSave||'';}})();
+        """
+        web.evaluateJavaScript(tighten) { _, _ in
+            // Give layout a beat to settle before snapshotting.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                web.createPDF(configuration: WKPDFConfiguration()) { result in
+                    web.evaluateJavaScript(restore, completionHandler: nil)
+                    guard case .success(let data) = result else { return }
+                    Self.paginate(pdfData: data, to: url)
+                }
+            }
         }
     }
 
@@ -106,7 +121,7 @@ final class PreviewController: ObservableObject {
         guard content.width > 0, content.height > 0 else { try? pdfData.write(to: url); return }
 
         let pageW: CGFloat = 612, pageH: CGFloat = 792   // US Letter @ 72 dpi
-        let margin: CGFloat = 18                          // ¼ inch on all sides
+        let margin: CGFloat = 0                           // no page margin
         let contentW = pageW - margin * 2
         let usableH = pageH - margin * 2
         let scale = contentW / content.width                 // fit width to page
