@@ -106,7 +106,7 @@ final class PreviewController: ObservableObject {
         guard content.width > 0, content.height > 0 else { try? pdfData.write(to: url); return }
 
         let pageW: CGFloat = 612, pageH: CGFloat = 792   // US Letter @ 72 dpi
-        let margin: CGFloat = 36
+        let margin: CGFloat = 18                          // ¼ inch on all sides
         let contentW = pageW - margin * 2
         let usableH = pageH - margin * 2
         let scale = contentW / content.width                 // fit width to page
