@@ -54,7 +54,7 @@ enum AppTheme: String, CaseIterable {
 final class Workspace: ObservableObject {
     @Published var documents: [MarkdownDocument] = []
     @Published var selectedID: UUID?
-    @Published var viewMode: ViewMode = .split
+    @Published var viewMode: ViewMode = .preview
     @Published var theme: AppTheme {
         didSet { UserDefaults.standard.set(theme.rawValue, forKey: "theme") }
     }

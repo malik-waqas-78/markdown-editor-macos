@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import AppKit
+import PDFKit
 
 /// Renders markdown to HTML in a WKWebView using the bundled marked + highlight.js.
 struct PreviewView: NSViewRepresentable {
@@ -86,12 +87,53 @@ final class PreviewController: ObservableObject {
 
     func exportPDF(to url: URL) {
         guard let web = webView else { return }
-        let config = WKPDFConfiguration()
-        web.createPDF(configuration: config) { result in
-            if case .success(let data) = result {
-                try? data.write(to: url)
-            }
+        // Render the whole document to a single tall PDF page, then re-slice it
+        // into US-Letter pages so the output paginates properly.
+        web.createPDF(configuration: WKPDFConfiguration()) { result in
+            guard case .success(let data) = result else { return }
+            Self.paginate(pdfData: data, to: url)
         }
+    }
+
+    /// Slice a single tall PDF page into multiple US-Letter pages.
+    static func paginate(pdfData: Data, to url: URL) {
+        guard let src = PDFDocument(data: pdfData),
+              let page = src.page(at: 0) else {
+            try? pdfData.write(to: url)   // fallback: keep the single-page PDF
+            return
+        }
+        let content = page.bounds(for: .mediaBox)
+        guard content.width > 0, content.height > 0 else { try? pdfData.write(to: url); return }
+
+        let pageW: CGFloat = 612, pageH: CGFloat = 792   // US Letter @ 72 dpi
+        let margin: CGFloat = 36
+        let contentW = pageW - margin * 2
+        let usableH = pageH - margin * 2
+        let scale = contentW / content.width                 // fit width to page
+        let sliceContentH = usableH / scale                  // content points per page
+        let pageCount = max(1, Int(ceil(content.height / sliceContentH)))
+
+        guard let consumer = CGDataConsumer(url: url as CFURL) else { try? pdfData.write(to: url); return }
+        var mediaBox = CGRect(x: 0, y: 0, width: pageW, height: pageH)
+        guard let ctx = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
+            try? pdfData.write(to: url); return
+        }
+
+        for i in 0..<pageCount {
+            ctx.beginPage(mediaBox: &mediaBox)
+            ctx.saveGState()
+            ctx.setFillColor(CGColor(gray: 1, alpha: 1))
+            ctx.fill(mediaBox)
+            // Top of this page's content strip, in source-PDF (bottom-left origin) coords.
+            let yTop = content.maxY - CGFloat(i) * sliceContentH
+            ctx.clip(to: CGRect(x: margin, y: margin, width: contentW, height: usableH))
+            ctx.translateBy(x: margin, y: margin + usableH - yTop * scale)
+            ctx.scaleBy(x: scale, y: scale)
+            page.draw(with: .mediaBox, to: ctx)
+            ctx.restoreGState()
+            ctx.endPage()
+        }
+        ctx.closePDF()
     }
 
     func renderedHTML(completion: @escaping (String) -> Void) {
